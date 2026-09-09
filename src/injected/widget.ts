@@ -5,23 +5,38 @@ import { loadSettings, saveSettings } from '../shared/settings'
 import { PROVIDERS, getProvider, DEFAULT_PROVIDER_ID } from '../shared/providers'
 import { LOCALES, t as translate, detectLocale, localeName, speechLang, type Locale } from '../shared/i18n'
 import { WM_NS, type ToolDescriptor } from '../shared/protocol'
+import { scanDeclarativeTools, type DeclarativeTool } from './declarative'
 import type { ToolDef } from '../panel/claude'
 
 marked.setOptions({ async: false })
 
-// ─── Bridge communication ─────────────────────────────────────────────────────
+// ─── Tool sources ─────────────────────────────────────────────────────────────
+//
+// Two independent sources are merged:
+//  1. Imperative — document.modelContext.registerTool() via the MAIN-world bridge
+//  2. Declarative — <form toolname="…"> parsed from the DOM by this content script
 
 let _channelId: string | null = null
-let _currentTools: ToolDescriptor[] = []
+let _bridgeTools: ToolDescriptor[] = []
+let _declTools: DeclarativeTool[] = []
+const _declExec = new Map<string, (input: Record<string, unknown>) => string>()
 const _toolResultListeners = new Map<string, (ok: boolean, result: string) => void>()
+
+function mergedTools(): ToolDescriptor[] {
+  return [..._bridgeTools, ..._declTools.map((d) => d.descriptor)]
+}
+
+function recomputeTools() {
+  onToolsChanged(mergedTools())
+}
 
 window.addEventListener('message', (ev) => {
   const msg = ev.data
   if (!msg || msg.ns !== WM_NS) return
   if (msg.kind === 'tools-changed') {
     _channelId = msg.channelId
-    _currentTools = msg.tools ?? []
-    onToolsChanged(_currentTools)
+    _bridgeTools = msg.tools ?? []
+    recomputeTools()
   } else if (msg.kind === 'tool-result') {
     const settle = _toolResultListeners.get(msg.callId)
     if (settle) {
@@ -46,6 +61,14 @@ function discoverBridge() {
   for (const delay of [200, 600, 1500, 3000]) setTimeout(sayHello, delay)
 }
 
+/** Rescan the DOM for declarative <form toolname="…"> tools. */
+function refreshDeclarativeTools() {
+  _declTools = scanDeclarativeTools(document)
+  _declExec.clear()
+  for (const d of _declTools) _declExec.set(d.descriptor.name, d.execute)
+  recomputeTools()
+}
+
 function toToolDefs(tools: ToolDescriptor[]): ToolDef[] {
   return tools.map((t) => ({
     name: t.name,
@@ -55,6 +78,17 @@ function toToolDefs(tools: ToolDescriptor[]): ToolDef[] {
 }
 
 function callTool(name: string, input: unknown): Promise<{ ok: boolean; result: string }> {
+  // Declarative tools run locally (fill + submit the form); no bridge round-trip.
+  const declExec = _declExec.get(name)
+  if (declExec) {
+    return new Promise((resolve) => {
+      try {
+        resolve({ ok: true, result: declExec((input as Record<string, unknown>) ?? {}) })
+      } catch (err) {
+        resolve({ ok: false, result: err instanceof Error ? err.message : String(err) })
+      }
+    })
+  }
   return new Promise((resolve) => {
     if (!_channelId) return resolve({ ok: false, result: 'Bridge not connected' })
     const callId = crypto.randomUUID()
@@ -763,12 +797,13 @@ function handleHelp() {
 
 function handleTools() {
   removeWelcome()
+  const tools = mergedTools()
   const card = document.createElement('div')
   card.className = 'card'
-  if (_currentTools.length === 0) {
+  if (tools.length === 0) {
     card.innerHTML = `<div class="card-title">${escHtml(t('card.pageTools'))}</div><div class="card-row">${escHtml(t('card.noPageTools'))}</div>`
   } else {
-    const rows = _currentTools
+    const rows = tools
       .map(
         (tool) =>
           `<div class="card-row"><div class="rname tmono">${escHtml(tool.name)}</div>${
@@ -776,9 +811,9 @@ function handleTools() {
           }</div>`,
       )
       .join('')
-    const title = _currentTools.length === 1
+    const title = tools.length === 1
       ? t('card.toolsCount.one')
-      : t('card.toolsCount', { n: _currentTools.length })
+      : t('card.toolsCount', { n: tools.length })
     card.innerHTML = `<div class="card-title">${escHtml(title)}</div>${rows}`
   }
   messagesEl.appendChild(card)
@@ -1107,7 +1142,9 @@ sendBtn.addEventListener('click', async () => {
     return
   }
 
-  if (!_channelId) {
+  // A bridge channel is only required when there are no declarative tools to
+  // drive; declarative tools run without the MAIN-world bridge.
+  if (!_channelId && _declTools.length === 0) {
     appendNotice(t('notice.noChannel'))
     return
   }
@@ -1139,7 +1176,7 @@ sendBtn.addEventListener('click', async () => {
       model: settings.model,
       system: SYSTEM_PROMPT,
       messages,
-      tools: toToolDefs(_currentTools),
+      tools: toToolDefs(mergedTools()),
       callTool,
       onEvent,
     })
@@ -1161,10 +1198,30 @@ sendBtn.addEventListener('click', async () => {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
+// Rescan declarative tools when the DOM changes (SPAs add/remove forms on
+// navigation). Debounced to coalesce bursts of mutations.
+let _declScanTimer: ReturnType<typeof setTimeout> | undefined
+function scheduleDeclScan() {
+  if (_declScanTimer) return
+  _declScanTimer = setTimeout(() => {
+    _declScanTimer = undefined
+    refreshDeclarativeTools()
+  }, 300)
+}
+
 async function init() {
   const settings = await loadSettings()
   setLocale(settings.locale)
   discoverBridge()
+  refreshDeclarativeTools()
+
+  const observer = new MutationObserver(scheduleDeclScan)
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['toolname'],
+  })
 }
 
 void init()
