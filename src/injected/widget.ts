@@ -3,6 +3,7 @@ import { runAgentTurn, type AgentEvent } from '../panel/agent'
 import { ClaudeApiError, makeProviderClient, type Message } from '../panel/claude'
 import { loadSettings, saveSettings } from '../shared/settings'
 import { PROVIDERS, getProvider, DEFAULT_PROVIDER_ID } from '../shared/providers'
+import { LOCALES, t as translate, detectLocale, localeName, type Locale } from '../shared/i18n'
 import { WM_NS, type ToolDescriptor } from '../shared/protocol'
 import type { ToolDef } from '../panel/claude'
 
@@ -49,14 +50,15 @@ function callTool(name: string, input: unknown): Promise<{ ok: boolean; result: 
 
 // ─── Slash commands ───────────────────────────────────────────────────────────
 
-type Command = { cmd: string; desc: string }
+type Command = { cmd: string; descKey: string }
 const COMMANDS: Command[] = [
-  { cmd: '/config', desc: 'Configure provider and API key' },
-  { cmd: '/model', desc: 'Quick-switch model' },
-  { cmd: '/tools', desc: 'List tools available on this page' },
-  { cmd: '/debug', desc: 'Toggle raw request/response debug view' },
-  { cmd: '/clear', desc: 'Clear conversation' },
-  { cmd: '/help', desc: 'Show available commands' },
+  { cmd: '/config', descKey: 'cmd.config' },
+  { cmd: '/model', descKey: 'cmd.model' },
+  { cmd: '/tools', descKey: 'cmd.tools' },
+  { cmd: '/debug', descKey: 'cmd.debug' },
+  { cmd: '/language', descKey: 'cmd.language' },
+  { cmd: '/clear', descKey: 'cmd.clear' },
+  { cmd: '/help', descKey: 'cmd.help' },
 ]
 
 // ─── CSS ──────────────────────────────────────────────────────────────────────
@@ -342,55 +344,59 @@ panel.innerHTML = `
 <div id="header">
   <div class="avatar">${IC_BOT}</div>
   <div class="hinfo">
-    <div class="htitle">AI Assistant</div>
+    <div class="htitle" data-i18n="header.title">AI Assistant</div>
     <div class="hstatus"><span class="hdot" id="hdot"></span><span id="hstatus-text">Online</span></div>
   </div>
   <div class="hactions">
-    <button class="hbtn" id="btn-debug" title="Debug on — click or /debug to turn off" hidden>${IC_BUG}</button>
+    <button class="hbtn" id="btn-debug" title="Debug" hidden>${IC_BUG}</button>
     <button class="hbtn" id="btn-config" title="Settings">${IC_COG}</button>
     <button class="hbtn" id="btn-min" title="Minimize">${IC_MIN}</button>
     <button class="hbtn" id="btn-close" title="Close">${IC_CLOSE}</button>
   </div>
 </div>
 <div id="banner" hidden></div>
-<div id="toolbar"><span id="tcdot"></span><span id="tclabel">Checking for tools…</span></div>
+<div id="toolbar"><span id="tcdot"></span><span id="tclabel" data-i18n="toolbar.checking">Checking for tools…</span></div>
 <div id="setup" class="hidden">
   <div class="setup-icon">🔑</div>
-  <p class="setup-title">Configure your AI provider</p>
-  <p class="setup-sub">Choose a provider and enter your API key to get started. You can change this any time with <code>/config</code>.</p>
-  <button class="setup-btn" id="setup-go">Open settings →</button>
+  <p class="setup-title" data-i18n="setup.title">Configure your AI provider</p>
+  <p class="setup-sub" data-i18n="setup.sub">Choose a provider and enter your API key to get started.</p>
+  <button class="setup-btn" id="setup-go" data-i18n="setup.go">Open settings →</button>
 </div>
 <div id="messages">
   <div class="welcome">
     <div class="wicon">✨</div>
-    <p>Hi! I'm your AI assistant.<br><strong>Ask me anything about this page.</strong><br><span style="font-size:11px;margin-top:4px;display:block">Type <code style="background:#e0e7ff;padding:1px 4px;border-radius:3px">/</code> for commands</span></p>
+    <p><span data-i18n="welcome.hi">Hi! I'm your AI assistant.</span><br><strong data-i18n="welcome.ask">Ask me anything about this page.</strong><br><span style="font-size:11px;margin-top:4px;display:block"><span data-i18n="welcome.hint">Type / for commands</span></span></p>
   </div>
 </div>
 <div id="config" class="hidden">
-  <p class="cfg-title">Settings</p>
-  <p class="cfg-subtitle">Configure provider, model and API key</p>
+  <p class="cfg-title" data-i18n="config.title">Settings</p>
+  <p class="cfg-subtitle" data-i18n="config.sub">Configure provider, model and API key</p>
   <div class="cfg-field">
-    <span class="cfg-label">Provider</span>
+    <span class="cfg-label" data-i18n="config.provider">Provider</span>
     <select class="cfg-select" id="cfg-provider"></select>
   </div>
   <div class="cfg-field">
-    <span class="cfg-label">Model</span>
+    <span class="cfg-label" data-i18n="config.model">Model</span>
     <select class="cfg-select" id="cfg-model"></select>
   </div>
   <div class="cfg-field">
-    <span class="cfg-label">API Key</span>
-    <div class="cfg-key-row">
-      <input type="password" class="cfg-input" id="cfg-key" autocomplete="off" placeholder="Paste your key…" />
-      <button id="cfg-toggle-key" type="button">Show</button>
-    </div>
-    <a class="cfg-docs" id="cfg-docs" href="#" target="_blank">Get API key ↗</a>
+    <span class="cfg-label" data-i18n="config.language">Language</span>
+    <select class="cfg-select" id="cfg-locale"></select>
   </div>
-  <button class="cfg-save" id="cfg-save">Save</button>
-  <div class="cfg-saved" id="cfg-saved">✓ Saved</div>
+  <div class="cfg-field">
+    <span class="cfg-label" data-i18n="config.apiKey">API Key</span>
+    <div class="cfg-key-row">
+      <input type="password" class="cfg-input" id="cfg-key" autocomplete="off" placeholder="sk-…" />
+      <button id="cfg-toggle-key" type="button" data-i18n="config.show">Show</button>
+    </div>
+    <a class="cfg-docs" id="cfg-docs" href="#" target="_blank" data-i18n="config.getKey">Get API key ↗</a>
+  </div>
+  <button class="cfg-save" id="cfg-save" data-i18n="config.save">Save</button>
+  <div class="cfg-saved" id="cfg-saved" data-i18n="config.saved">✓ Saved</div>
 </div>
 <div id="cmd-palette" class="hidden"></div>
 <div id="composer">
-  <textarea id="prompt" rows="1" placeholder="Type a message or /command…"></textarea>
+  <textarea id="prompt" rows="1" data-i18n-ph="composer.placeholder" placeholder="Type a message or /command…"></textarea>
   <button id="send">${IC_SEND}</button>
 </div>
 `
@@ -416,6 +422,7 @@ const cmdPalette = $('cmd-palette') as HTMLDivElement
 // config refs
 const cfgProvider = $('cfg-provider') as HTMLSelectElement
 const cfgModel = $('cfg-model') as HTMLSelectElement
+const cfgLocale = $('cfg-locale') as HTMLSelectElement
 const cfgKey = $('cfg-key') as HTMLInputElement
 const cfgDocs = $('cfg-docs') as HTMLAnchorElement
 const cfgToggleKey = $('cfg-toggle-key') as HTMLButtonElement
@@ -435,6 +442,42 @@ let busy = false
 let panelOpen = false
 let debugMode = false
 let showingConfig = false
+let currentLocale: Locale = detectLocale()
+
+// ─── i18n ─────────────────────────────────────────────────────────────────────
+
+function t(key: string, params?: Record<string, string | number>): string {
+  return translate(currentLocale, key, params)
+}
+
+/** Applies data-i18n / data-i18n-ph attributes across the panel. */
+function applyTranslations() {
+  panel.querySelectorAll('[data-i18n]').forEach((el) => {
+    const key = el.getAttribute('data-i18n')
+    if (key) el.textContent = t(key)
+  })
+  panel.querySelectorAll('[data-i18n-ph]').forEach((el) => {
+    const key = el.getAttribute('data-i18n-ph')
+    if (key) (el as HTMLInputElement | HTMLTextAreaElement).placeholder = t(key)
+  })
+  // Dynamic bits not covered by data attributes
+  refreshToolbarLabel()
+  cfgToggleKey.textContent = cfgKey.type === 'text' ? t('config.hide') : t('config.show')
+}
+
+function setLocale(loc: Locale) {
+  currentLocale = loc
+  applyTranslations()
+}
+
+let _lastToolCount = -1
+function refreshToolbarLabel() {
+  const n = _lastToolCount
+  if (n < 0) { tclabel.textContent = t('toolbar.checking'); return }
+  if (n === 0) { tclabel.textContent = t('toolbar.none'); hstatusText.textContent = t('status.noTools'); return }
+  tclabel.textContent = n === 1 ? t('toolbar.available.one') : t('toolbar.available', { n })
+  hstatusText.textContent = t('status.online')
+}
 
 // ─── FAB / Panel toggle ───────────────────────────────────────────────────────
 
@@ -473,19 +516,17 @@ fab.addEventListener('click', () => { if (panelOpen) closePanel(); else void ope
 // ─── Tools detection ──────────────────────────────────────────────────────────
 
 function onToolsChanged(tools: ToolDescriptor[]) {
+  _lastToolCount = tools.length
   if (tools.length > 0) {
     fab.classList.remove('hidden')
     tcdot.style.background = '#4ade80'
-    tclabel.textContent = `${tools.length} tool${tools.length === 1 ? '' : 's'} available`
-    hstatusText.textContent = 'Online'
     hdot.style.background = '#4ade80'
   } else {
     fab.classList.add('hidden')
     tcdot.style.background = '#94a3b8'
-    tclabel.textContent = 'No tools on this page'
-    hstatusText.textContent = 'No tools'
     hdot.style.background = '#94a3b8'
   }
+  refreshToolbarLabel()
 }
 
 // ─── Setup screen ─────────────────────────────────────────────────────────────
@@ -530,22 +571,40 @@ function populateCfgModels(providerId: string, selectedModel: string) {
   cfgKey.placeholder = provider.keyPlaceholder
 }
 
+function populateCfgLocales(selected: Locale) {
+  cfgLocale.innerHTML = ''
+  for (const l of LOCALES) {
+    const opt = document.createElement('option')
+    opt.value = l.id
+    opt.textContent = l.name
+    opt.selected = l.id === selected
+    cfgLocale.appendChild(opt)
+  }
+}
+
 cfgProvider.addEventListener('change', () => {
   populateCfgModels(cfgProvider.value, cfgModel.value)
+})
+
+// Live-preview the language as soon as it's picked
+cfgLocale.addEventListener('change', () => {
+  setLocale(cfgLocale.value as Locale)
 })
 
 cfgToggleKey.addEventListener('click', () => {
   const shown = cfgKey.type === 'text'
   cfgKey.type = shown ? 'password' : 'text'
-  cfgToggleKey.textContent = shown ? 'Show' : 'Hide'
+  cfgToggleKey.textContent = shown ? t('config.show') : t('config.hide')
 })
 
 cfgSave.addEventListener('click', async () => {
   await saveSettings({
     providerId: cfgProvider.value,
     model: cfgModel.value,
+    locale: cfgLocale.value as Locale,
     apiKey: cfgKey.value.trim(),
   })
+  setLocale(cfgLocale.value as Locale)
   cfgSaved.style.display = 'block'
   setTimeout(() => { cfgSaved.style.display = '' }, 1800)
   // If we were in setup, transition to chat
@@ -560,6 +619,7 @@ async function showConfig() {
   const settings = await loadSettings()
   populateCfgProviders(settings.providerId)
   populateCfgModels(settings.providerId, settings.model)
+  populateCfgLocales(settings.locale)
   cfgKey.value = settings.apiKey
 
   configEl.classList.remove('hidden')
@@ -584,7 +644,7 @@ function buildCmdPalette(matches: Command[]) {
   matches.forEach((c, i) => {
     const div = document.createElement('div')
     div.className = 'cmd-item'
-    div.innerHTML = `<span class="cmd-kw">${escHtml(c.cmd)}</span><span class="cmd-desc">${escHtml(c.desc)}</span>`
+    div.innerHTML = `<span class="cmd-kw">${escHtml(c.cmd)}</span><span class="cmd-desc">${escHtml(t(c.descKey))}</span>`
     div.addEventListener('mousedown', (e) => {
       e.preventDefault()
       promptEl.value = c.cmd + ' '
@@ -627,6 +687,7 @@ function executeOrFocusCmd(cmd: string) {
   if (base === '/model') { void handleModel(); return }
   if (base === '/tools') { handleTools(); return }
   if (base === '/debug') { handleDebug(); return }
+  if (base === '/language') { handleLanguage(); return }
 }
 
 function handleHelp() {
@@ -634,9 +695,9 @@ function handleHelp() {
   const card = document.createElement('div')
   card.className = 'card'
   const rows = COMMANDS.map(
-    (c) => `<div class="card-row"><span class="tmono">${escHtml(c.cmd)}</span> — ${escHtml(c.desc)}</div>`,
+    (c) => `<div class="card-row"><span class="tmono">${escHtml(c.cmd)}</span> — ${escHtml(t(c.descKey))}</div>`,
   ).join('')
-  card.innerHTML = `<div class="card-title">Available commands</div>${rows}`
+  card.innerHTML = `<div class="card-title">${escHtml(t('card.commands'))}</div>${rows}`
   messagesEl.appendChild(card)
   scrollBottom()
 }
@@ -646,17 +707,20 @@ function handleTools() {
   const card = document.createElement('div')
   card.className = 'card'
   if (_currentTools.length === 0) {
-    card.innerHTML = `<div class="card-title">Page tools</div><div class="card-row">No WebMCP tools exposed on this page.</div>`
+    card.innerHTML = `<div class="card-title">${escHtml(t('card.pageTools'))}</div><div class="card-row">${escHtml(t('card.noPageTools'))}</div>`
   } else {
     const rows = _currentTools
       .map(
-        (t) =>
-          `<div class="card-row"><div class="rname tmono">${escHtml(t.name)}</div>${
-            t.description ? `<div class="rdesc">${escHtml(t.description)}</div>` : ''
+        (tool) =>
+          `<div class="card-row"><div class="rname tmono">${escHtml(tool.name)}</div>${
+            tool.description ? `<div class="rdesc">${escHtml(tool.description)}</div>` : ''
           }</div>`,
       )
       .join('')
-    card.innerHTML = `<div class="card-title">${_currentTools.length} tool${_currentTools.length === 1 ? '' : 's'} on this page</div>${rows}`
+    const title = _currentTools.length === 1
+      ? t('card.toolsCount.one')
+      : t('card.toolsCount', { n: _currentTools.length })
+    card.innerHTML = `<div class="card-title">${escHtml(title)}</div>${rows}`
   }
   messagesEl.appendChild(card)
   scrollBottom()
@@ -670,14 +734,35 @@ async function handleModel() {
   removeWelcome()
   const card = document.createElement('div')
   card.className = 'card'
-  card.innerHTML = `<div class="card-title">${escHtml(provider.name)} — pick a model</div>`
+  card.innerHTML = `<div class="card-title">${escHtml(t('card.pickModel', { provider: provider.name }))}</div>`
   for (const m of provider.models) {
     const row = document.createElement('div')
     row.className = `card-row pick${m.id === settings.model ? ' current' : ''}`
     row.innerHTML = `<span class="rname">${escHtml(m.name)}</span>${m.id === settings.model ? '<span class="rcheck">✓</span>' : ''}`
     row.addEventListener('click', async () => {
       await saveSettings({ model: m.id })
-      appendNotice(`Model set to ${m.name}`)
+      appendNotice(t('notice.modelSet', { name: m.name }))
+      card.remove()
+    })
+    card.appendChild(row)
+  }
+  messagesEl.appendChild(card)
+  scrollBottom()
+}
+
+function handleLanguage() {
+  removeWelcome()
+  const card = document.createElement('div')
+  card.className = 'card'
+  card.innerHTML = `<div class="card-title">${escHtml(t('card.pickLanguage'))}</div>`
+  for (const l of LOCALES) {
+    const row = document.createElement('div')
+    row.className = `card-row pick${l.id === currentLocale ? ' current' : ''}`
+    row.innerHTML = `<span class="rname">${escHtml(l.name)}</span>${l.id === currentLocale ? '<span class="rcheck">✓</span>' : ''}`
+    row.addEventListener('click', async () => {
+      await saveSettings({ locale: l.id })
+      setLocale(l.id)
+      appendNotice(t('notice.languageSet', { name: localeName(l.id) }))
       card.remove()
     })
     card.appendChild(row)
@@ -688,7 +773,7 @@ async function handleModel() {
 
 function handleClear() {
   messages = []
-  messagesEl.innerHTML = `<div class="welcome"><div class="wicon">✨</div><p>Conversation cleared.<br><strong>Ask me something!</strong></p></div>`
+  messagesEl.innerHTML = `<div class="welcome"><div class="wicon">✨</div><p><span>${escHtml(t('welcome.cleared'))}</span><br><strong>${escHtml(t('welcome.clearedAsk'))}</strong></p></div>`
   promptEl.value = ''
 }
 
@@ -771,7 +856,7 @@ function setDebug(on: boolean) {
 
 function handleDebug() {
   setDebug(!debugMode)
-  appendNotice(debugMode ? 'Debug enabled — raw requests/responses are now shown' : 'Debug disabled')
+  appendNotice(debugMode ? t('notice.debugOn') : t('notice.debugOff'))
 }
 
 btnDebug.addEventListener('click', handleDebug)
@@ -847,7 +932,7 @@ sendBtn.addEventListener('click', async () => {
   }
 
   if (!_channelId) {
-    appendNotice('No WebMCP channel found on this page.')
+    appendNotice(t('notice.noChannel'))
     return
   }
 
@@ -884,7 +969,7 @@ sendBtn.addEventListener('click', async () => {
   } catch (err) {
     if (err instanceof ClaudeApiError && err.status === 401) {
       bannerEl.hidden = false
-      bannerEl.textContent = 'Invalid API key — use /config to update it.'
+      bannerEl.textContent = t('banner.invalidKey')
     }
     appendBubble('error', escHtml(err instanceof Error ? err.message : String(err)))
   } finally {
@@ -893,3 +978,12 @@ sendBtn.addEventListener('click', async () => {
     promptEl.focus()
   }
 })
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+
+async function init() {
+  const settings = await loadSettings()
+  setLocale(settings.locale)
+}
+
+void init()

@@ -1,10 +1,12 @@
 import { PROVIDERS, getProvider } from '../shared/providers'
+import { LOCALES, type Locale } from '../shared/i18n'
 import { loadSettings, saveSettings } from '../shared/settings'
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T
 
 const providerEl = $<HTMLSelectElement>('provider')
 const modelEl = $<HTMLSelectElement>('model')
+const localeEl = $<HTMLSelectElement>('locale')
 const apiKeyEl = $<HTMLInputElement>('apiKey')
 const keyDocsEl = $<HTMLAnchorElement>('key-docs')
 
@@ -38,10 +40,22 @@ providerEl.addEventListener('change', () => {
   populateModels(providerEl.value, modelEl.value)
 })
 
+function populateLocales(selected: Locale) {
+  localeEl.innerHTML = ''
+  for (const l of LOCALES) {
+    const opt = document.createElement('option')
+    opt.value = l.id
+    opt.textContent = l.name
+    opt.selected = l.id === selected
+    localeEl.appendChild(opt)
+  }
+}
+
 async function init() {
   const settings = await loadSettings()
   populateProviders(settings.providerId)
   populateModels(settings.providerId, settings.model)
+  populateLocales(settings.locale)
   apiKeyEl.value = settings.apiKey
 
   $<HTMLFormElement>('settings').addEventListener('submit', async (ev) => {
@@ -49,6 +63,7 @@ async function init() {
     await saveSettings({
       providerId: providerEl.value,
       model: modelEl.value,
+      locale: localeEl.value as Locale,
       apiKey: apiKeyEl.value.trim(),
     })
     $('status').textContent = 'Saved.'
