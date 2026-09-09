@@ -24,7 +24,7 @@ Instead, a MAIN-world content script injected at `document_start` **defines (or 
 
 ## Architecture
 
-Manifest V3, TypeScript + Vite. Four components:
+Manifest V3, TypeScript, bundled with esbuild (three IIFE content/background scripts + two static HTML pages — no need for Vite). Four components:
 
 1. **MAIN-world bridge** (`bridge.js`, `document_start`, `<all_urls>` — an allowlist can be added later): polyfills/wraps `document.modelContext` (`registerTool`, `unregisterTool`, declarative registration if used). Keeps a registry of `{name, description, inputSchema, execute}`. Talks to the isolated world via `window.postMessage` scoped by a random channel id generated per page load.
 2. **Isolated content script**: relay between the bridge and the service worker over a `chrome.runtime` port. Forwards tool added/removed notifications, tool-call requests, and results.
