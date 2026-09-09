@@ -1,1 +1,3 @@
-export {}
+import { installBridge } from './install'
+
+installBridge(window)
