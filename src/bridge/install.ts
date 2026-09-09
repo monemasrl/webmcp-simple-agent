@@ -12,10 +12,15 @@ function stringify(value: unknown): string {
   }
 }
 
+const LISTENER_KEY = Symbol.for('webmcp-bridge-listener')
+
 export function installBridge(
   win: Window,
   opts: { timeoutMs?: number; channelId?: string } = {},
 ): { registry: ToolRegistry; channelId: string } {
+  const prev = (win as any)[LISTENER_KEY] as EventListener | undefined
+  if (prev) win.removeEventListener('message', prev)
+
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const channelId = opts.channelId ?? crypto.randomUUID()
   const registry = new ToolRegistry()
@@ -90,15 +95,17 @@ export function installBridge(
     }
   }
 
-  win.addEventListener('message', (ev: MessageEvent) => {
+  const listener = (ev: MessageEvent) => {
     const msg = ev.data as RelayToBridge
-    if ((ev.source !== null && ev.source !== win) || !msg || msg.ns !== WM_NS || msg.channelId !== channelId) return
+    if (!msg || msg.ns !== WM_NS || msg.channelId !== channelId) return
     if (msg.kind === 'list-tools') {
       post({ ns: WM_NS, channelId, kind: 'tools-list', requestId: msg.requestId, tools: registry.list() })
     } else if (msg.kind === 'call-tool') {
       void callTool(msg.callId, msg.name, msg.input)
     }
-  })
+  }
+  ;(win as any)[LISTENER_KEY] = listener
+  win.addEventListener('message', listener)
 
   announce()
   return { registry, channelId }
