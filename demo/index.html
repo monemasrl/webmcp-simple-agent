@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+  <head><meta charset="utf-8" /><title>WebMCP Agent demo</title></head>
+  <body>
+    <h1>WebMCP Agent demo page</h1>
+    <p>Status: <span id="status">checking…</span></p>
+    <ul id="log"></ul>
+    <script>
+      const log = (t) => {
+        const li = document.createElement('li')
+        li.textContent = t
+        document.getElementById('log').appendChild(li)
+      }
+      const notes = []
+      if (!document.modelContext) {
+        document.getElementById('status').textContent =
+          'document.modelContext missing — is the WebMCP Agent extension installed and enabled?'
+      } else {
+        document.modelContext.registerTool({
+          name: 'get_time',
+          description: 'Returns the current time as an ISO string',
+          inputSchema: { type: 'object', properties: {} },
+          execute: async () => new Date().toISOString(),
+        })
+        document.modelContext.registerTool({
+          name: 'add_note',
+          description: 'Appends a note to the page and to an in-memory list',
+          inputSchema: {
+            type: 'object',
+            properties: { text: { type: 'string', description: 'The note text' } },
+            required: ['text'],
+          },
+          execute: async ({ text }) => { notes.push(text); log(text); return `Added. ${notes.length} notes total.` },
+        })
+        document.modelContext.registerTool({
+          name: 'list_notes',
+          description: 'Lists all notes added so far',
+          inputSchema: { type: 'object', properties: {} },
+          execute: async () => JSON.stringify(notes),
+        })
+        document.getElementById('status').textContent = '3 tools registered'
+      }
+    </script>
+  </body>
+</html>
