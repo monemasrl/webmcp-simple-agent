@@ -39,6 +39,10 @@ export function installRelay(win: Window, runtime: RelayRuntime): void {
     }
   })
 
+  // The bridge announces once at document_start; if we were set up after tools
+  // already registered, ask it to re-announce so we learn the channel + tools.
+  post({ ns: WM_NS, kind: 'hello' })
+
   runtime.onMessage((raw, sendResponse) => {
     const msg = raw as { kind?: string; name?: string; input?: unknown }
     if (msg?.kind === 'wm:list-tools') {

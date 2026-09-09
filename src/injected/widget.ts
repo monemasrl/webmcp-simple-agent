@@ -31,6 +31,21 @@ window.addEventListener('message', (ev) => {
   }
 })
 
+/** Ask the MAIN-world bridge to (re-)announce its current tools. */
+function sayHello() {
+  window.postMessage({ ns: WM_NS, kind: 'hello' }, '*')
+}
+
+/**
+ * The bridge announces tools once at document_start; this widget is injected
+ * at document_idle and may have missed it, especially on SPAs that register
+ * tools during bootstrap. Ping a few times to catch late/early registration.
+ */
+function discoverBridge() {
+  sayHello()
+  for (const delay of [200, 600, 1500, 3000]) setTimeout(sayHello, delay)
+}
+
 function toToolDefs(tools: ToolDescriptor[]): ToolDef[] {
   return tools.map((t) => ({
     name: t.name,
@@ -507,6 +522,8 @@ async function openPanel() {
   panel.classList.add('open')
   fab.innerHTML = IC_CLOSE
   fab.setAttribute('aria-label', 'Close AI assistant')
+  // Re-sync tools in case the page changed them while the panel was closed.
+  sayHello()
 
   // Check if we need to show setup screen
   const settings = await loadSettings()
@@ -1053,6 +1070,7 @@ sendBtn.addEventListener('click', async () => {
 async function init() {
   const settings = await loadSettings()
   setLocale(settings.locale)
+  discoverBridge()
 }
 
 void init()

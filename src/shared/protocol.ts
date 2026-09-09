@@ -13,6 +13,7 @@ export type BridgeToRelay =
   | { ns: typeof WM_NS; channelId: string; kind: 'tools-list'; requestId: string; tools: ToolDescriptor[] }
 
 export type RelayToBridge =
+  | { ns: typeof WM_NS; kind: 'hello' }
   | { ns: typeof WM_NS; channelId: string; kind: 'list-tools'; requestId: string }
   | { ns: typeof WM_NS; channelId: string; kind: 'call-tool'; callId: string; name: string; input: unknown }
 

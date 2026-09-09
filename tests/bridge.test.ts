@@ -80,6 +80,23 @@ describe('installBridge', () => {
     cleanup()
   })
 
+  it('re-announces current tools on a channelId-less hello ping', async () => {
+    const { win, received, channelId, cleanup } = setup()
+    win.document.modelContext.registerTool({
+      name: 'late', description: 'registered before discovery', inputSchema: {},
+      execute: async () => 'ok',
+    })
+    await flush()
+    received.length = 0 // discard announcements so far
+    // A widget that missed the initial announce pings without a channelId
+    win.postMessage({ ns: WM_NS, kind: 'hello' }, '*')
+    await flush(); await flush()
+    const announce = received.find((m) => m.kind === 'tools-changed') as any
+    expect(announce).toMatchObject({ channelId })
+    expect(announce.tools.map((t: any) => t.name)).toEqual(['late'])
+    cleanup()
+  })
+
   it('times out a hanging execute with ok:false', async () => {
     // Use a short real timeout instead of fake timers: happy-dom dispatches
     // postMessage via its own setTimeout, which makes fake-timer chaining brittle

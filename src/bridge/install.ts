@@ -105,7 +105,15 @@ export function installBridge(
 
   const listener = (ev: MessageEvent) => {
     const msg = ev.data as RelayToBridge
-    if (!msg || msg.ns !== WM_NS || msg.channelId !== channelId) return
+    if (!msg || msg.ns !== WM_NS) return
+    // `hello` is a discovery ping: a relay/widget that missed the initial
+    // announce (e.g. injected after tools already registered) asks us to
+    // re-announce. It carries no channelId — answer it before the id check.
+    if (msg.kind === 'hello') {
+      announce()
+      return
+    }
+    if (msg.channelId !== channelId) return
     if (msg.kind === 'list-tools') {
       post({ ns: WM_NS, channelId, kind: 'tools-list', requestId: msg.requestId, tools: registry.list() })
     } else if (msg.kind === 'call-tool') {
