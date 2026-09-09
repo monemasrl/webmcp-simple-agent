@@ -81,17 +81,18 @@ describe('installBridge', () => {
   })
 
   it('times out a hanging execute with ok:false', async () => {
-    vi.useFakeTimers()
-    const { win, received, channelId, cleanup } = setup({ timeoutMs: 1000 })
+    // Use a short real timeout instead of fake timers: happy-dom dispatches
+    // postMessage via its own setTimeout, which makes fake-timer chaining brittle
+    // when an async catch block is the source of the dispatched event.
+    const { win, received, channelId, cleanup } = setup({ timeoutMs: 50 })
     win.document.modelContext.registerTool({
       name: 'hang', description: '', inputSchema: {},
       execute: () => new Promise(() => {}),
     })
     win.postMessage({ ns: WM_NS, channelId, kind: 'call-tool', callId: 'c1', name: 'hang', input: {} }, '*')
-    await vi.advanceTimersByTimeAsync(10)
-    await vi.advanceTimersByTimeAsync(1001)
-    vi.useRealTimers()
-    await flush()
+    await flush(); await flush()
+    await new Promise((r) => setTimeout(r, 120))
+    await flush(); await flush()
     const result = received.find((m) => m.kind === 'tool-result') as any
     expect(result).toMatchObject({ callId: 'c1', ok: false })
     expect(result.result).toContain('timed out')
