@@ -92,7 +92,7 @@ export function installBridge(
 
   win.addEventListener('message', (ev: MessageEvent) => {
     const msg = ev.data as RelayToBridge
-    if (ev.source !== win || !msg || msg.ns !== WM_NS || msg.channelId !== channelId) return
+    if ((ev.source !== null && ev.source !== win) || !msg || msg.ns !== WM_NS || msg.channelId !== channelId) return
     if (msg.kind === 'list-tools') {
       post({ ns: WM_NS, channelId, kind: 'tools-list', requestId: msg.requestId, tools: registry.list() })
     } else if (msg.kind === 'call-tool') {
