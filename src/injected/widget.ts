@@ -139,6 +139,9 @@ const CSS = `
 #panel {
   position: fixed; bottom: 96px; right: 24px; z-index: 2147483647;
   width: 360px; height: 540px;
+  /* Never exceed the viewport: on short windows the top would be clipped and
+     the message list would be unreachable. */
+  max-height: calc(100vh - 120px);
   border-radius: 16px;
   box-shadow: 0 8px 40px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.06);
   display: flex; flex-direction: column; overflow: hidden;
@@ -189,6 +192,9 @@ const CSS = `
   display: flex; flex-direction: column; gap: 11px;
   scrollbar-width: thin; scrollbar-color: #e2e8f0 transparent;
 }
+/* Keep entries at natural height so the container scrolls instead of
+   squishing them (flex children default to flex-shrink:1). */
+#messages > * { flex-shrink: 0; }
 
 /* Welcome */
 .welcome { text-align: center; padding: 28px 14px; color: #94a3b8; }
