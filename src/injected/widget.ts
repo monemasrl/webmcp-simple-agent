@@ -54,6 +54,7 @@ const COMMANDS: Command[] = [
   { cmd: '/config', desc: 'Configure provider and API key' },
   { cmd: '/model', desc: 'Quick-switch model' },
   { cmd: '/tools', desc: 'List tools available on this page' },
+  { cmd: '/debug', desc: 'Toggle raw request/response debug view' },
   { cmd: '/clear', desc: 'Clear conversation' },
   { cmd: '/help', desc: 'Show available commands' },
 ]
@@ -121,6 +122,8 @@ const CSS = `
 }
 .hbtn:hover { background: rgba(255,255,255,0.28); }
 .hbtn svg { width: 14px; height: 14px; }
+.hbtn.active { background: #fbbf24; color: #78350f; }
+.hbtn.active:hover { background: #f59e0b; }
 
 /* Toolbar */
 #toolbar {
@@ -236,13 +239,6 @@ const CSS = `
 #send:hover { background: #4338ca; } #send:disabled { background: #c7d2fe; cursor: default; }
 #send svg { width: 15px; height: 15px; }
 
-/* Footer bar (debug toggle) */
-#footer {
-  display: flex; align-items: center; justify-content: flex-end;
-  padding: 3px 11px 6px; gap: 5px;
-}
-#footer label { font-size: 11px; color: #94a3b8; display: flex; align-items: center; gap: 4px; cursor: pointer; }
-
 /* Command palette */
 #cmd-palette {
   position: absolute; bottom: 110px; left: 11px; right: 11px;
@@ -321,6 +317,7 @@ const IC_SEND = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L
 const IC_BOT = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a2 2 0 012 2c0 .74-.4 1.38-1 1.72V7h1a7 7 0 017 7H3a7 7 0 017-7h1V5.72A2 2 0 1112 2zM7.5 13a1.5 1.5 0 100 3 1.5 1.5 0 000-3zm9 0a1.5 1.5 0 100 3 1.5 1.5 0 000-3zM3 21v-1a5 5 0 015-5h8a5 5 0 015 5v1H3z"/></svg>`
 const IC_MIN = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13H5v-2h14v2z"/></svg>`
 const IC_COG = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94a7 7 0 000-1.88l2.03-1.58a.49.49 0 00.12-.62l-1.92-3.32a.49.49 0 00-.6-.21l-2.39.96a7.02 7.02 0 00-1.63-.94l-.36-2.54A.48.48 0 0014 3h-3.84a.48.48 0 00-.48.41l-.36 2.54a7.02 7.02 0 00-1.63.94l-2.39-.96a.48.48 0 00-.6.21L2.78 9.46a.47.47 0 00.12.62l2.03 1.58a7.23 7.23 0 000 1.88l-2.03 1.58a.47.47 0 00-.12.62l1.92 3.32c.12.22.37.3.6.21l2.39-.96c.5.36 1.05.67 1.63.94l.36 2.54c.05.28.3.49.58.49H14c.28 0 .53-.21.57-.49l.36-2.54a7.02 7.02 0 001.63-.94l2.39.96c.22.09.48 0 .6-.21l1.92-3.32a.47.47 0 00-.12-.62l-2.21-1.58zM12 15.6a3.6 3.6 0 110-7.2 3.6 3.6 0 010 7.2z"/></svg>`
+const IC_BUG = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 8h-2.81a5.98 5.98 0 00-1.82-1.96l1.63-1.63-1.41-1.41-2.17 2.17a6.02 6.02 0 00-2.44 0L8.83 3 7.42 4.41l1.62 1.63A5.98 5.98 0 007.22 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81a6 6 0 0010.38 0H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/></svg>`
 
 // ─── Shadow DOM ───────────────────────────────────────────────────────────────
 
@@ -349,6 +346,7 @@ panel.innerHTML = `
     <div class="hstatus"><span class="hdot" id="hdot"></span><span id="hstatus-text">Online</span></div>
   </div>
   <div class="hactions">
+    <button class="hbtn" id="btn-debug" title="Debug on — click or /debug to turn off" hidden>${IC_BUG}</button>
     <button class="hbtn" id="btn-config" title="Settings">${IC_COG}</button>
     <button class="hbtn" id="btn-min" title="Minimize">${IC_MIN}</button>
     <button class="hbtn" id="btn-close" title="Close">${IC_CLOSE}</button>
@@ -395,9 +393,6 @@ panel.innerHTML = `
   <textarea id="prompt" rows="1" placeholder="Type a message or /command…"></textarea>
   <button id="send">${IC_SEND}</button>
 </div>
-<div id="footer">
-  <label><input type="checkbox" id="debug-toggle"> Debug</label>
-</div>
 `
 shadow.appendChild(panel)
 document.documentElement.appendChild(host)
@@ -415,7 +410,7 @@ const tclabel = $('tclabel') as HTMLSpanElement
 const tcdot = $('tcdot') as HTMLSpanElement
 const hstatusText = $('hstatus-text') as HTMLSpanElement
 const hdot = $('hdot') as HTMLSpanElement
-const debugToggle = $('debug-toggle') as HTMLInputElement
+const btnDebug = $('btn-debug') as HTMLButtonElement
 const cmdPalette = $('cmd-palette') as HTMLDivElement
 
 // config refs
@@ -631,6 +626,7 @@ function executeOrFocusCmd(cmd: string) {
   if (base === '/help') { handleHelp(); return }
   if (base === '/model') { void handleModel(); return }
   if (base === '/tools') { handleTools(); return }
+  if (base === '/debug') { handleDebug(); return }
 }
 
 function handleHelp() {
@@ -766,10 +762,19 @@ function toolCallBlock(name: string, input: unknown): (ok: boolean, result: stri
 
 // ─── Debug toggle ─────────────────────────────────────────────────────────────
 
-debugToggle.addEventListener('change', () => {
-  debugMode = debugToggle.checked
+function setDebug(on: boolean) {
+  debugMode = on
   messagesEl.classList.toggle('debug-on', debugMode)
-})
+  btnDebug.hidden = !debugMode
+  btnDebug.classList.toggle('active', debugMode)
+}
+
+function handleDebug() {
+  setDebug(!debugMode)
+  appendNotice(debugMode ? 'Debug enabled — raw requests/responses are now shown' : 'Debug disabled')
+}
+
+btnDebug.addEventListener('click', handleDebug)
 
 // ─── Auto-resize textarea ─────────────────────────────────────────────────────
 
