@@ -52,7 +52,8 @@ function callTool(name: string, input: unknown): Promise<{ ok: boolean; result: 
 type Command = { cmd: string; desc: string }
 const COMMANDS: Command[] = [
   { cmd: '/config', desc: 'Configure provider and API key' },
-  { cmd: '/model', desc: 'Switch model' },
+  { cmd: '/model', desc: 'Quick-switch model' },
+  { cmd: '/tools', desc: 'List tools available on this page' },
   { cmd: '/clear', desc: 'Clear conversation' },
   { cmd: '/help', desc: 'Show available commands' },
 ]
@@ -184,6 +185,27 @@ const CSS = `
 }
 
 .notice { align-self: center; font-size: 11px; color: #94a3b8; text-align: center; }
+
+/* Inline card (used by /model and /tools) */
+.card {
+  align-self: stretch; width: 100%;
+  border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; background: #fff;
+}
+.card-title {
+  padding: 8px 12px; font-size: 12px; font-weight: 600; color: #475569;
+  background: #f8fafc; border-bottom: 1px solid #e2e8f0;
+}
+.card-row {
+  padding: 8px 12px; font-size: 12px; color: #334155; border-bottom: 1px solid #f1f5f9;
+}
+.card-row:last-child { border-bottom: none; }
+.card-row.pick { cursor: pointer; transition: background 0.1s; display: flex; align-items: center; gap: 8px; }
+.card-row.pick:hover { background: #eef2ff; }
+.card-row.current { background: #eef2ff; }
+.card-row .rname { font-weight: 500; color: #0f172a; }
+.card-row .rdesc { color: #64748b; margin-top: 2px; }
+.card-row .rcheck { color: #4f46e5; font-weight: 700; margin-left: auto; }
+.card-row .tmono { font-family: ui-monospace,monospace; font-weight: 600; color: #4f46e5; }
 
 /* Spinner */
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -607,11 +629,65 @@ function executeOrFocusCmd(cmd: string) {
   if (base === '/clear') { handleClear(); return }
   if (base === '/config') { void showConfig(); return }
   if (base === '/help') { handleHelp(); return }
-  if (base === '/model') { void showConfig(); return }
+  if (base === '/model') { void handleModel(); return }
+  if (base === '/tools') { handleTools(); return }
 }
 
 function handleHelp() {
-  appendNotice('Commands: /config · /model · /clear · /help')
+  removeWelcome()
+  const card = document.createElement('div')
+  card.className = 'card'
+  const rows = COMMANDS.map(
+    (c) => `<div class="card-row"><span class="tmono">${escHtml(c.cmd)}</span> — ${escHtml(c.desc)}</div>`,
+  ).join('')
+  card.innerHTML = `<div class="card-title">Available commands</div>${rows}`
+  messagesEl.appendChild(card)
+  scrollBottom()
+}
+
+function handleTools() {
+  removeWelcome()
+  const card = document.createElement('div')
+  card.className = 'card'
+  if (_currentTools.length === 0) {
+    card.innerHTML = `<div class="card-title">Page tools</div><div class="card-row">No WebMCP tools exposed on this page.</div>`
+  } else {
+    const rows = _currentTools
+      .map(
+        (t) =>
+          `<div class="card-row"><div class="rname tmono">${escHtml(t.name)}</div>${
+            t.description ? `<div class="rdesc">${escHtml(t.description)}</div>` : ''
+          }</div>`,
+      )
+      .join('')
+    card.innerHTML = `<div class="card-title">${_currentTools.length} tool${_currentTools.length === 1 ? '' : 's'} on this page</div>${rows}`
+  }
+  messagesEl.appendChild(card)
+  scrollBottom()
+}
+
+async function handleModel() {
+  const settings = await loadSettings()
+  const provider = getProvider(settings.providerId)
+  if (!provider) { void showConfig(); return }
+
+  removeWelcome()
+  const card = document.createElement('div')
+  card.className = 'card'
+  card.innerHTML = `<div class="card-title">${escHtml(provider.name)} — pick a model</div>`
+  for (const m of provider.models) {
+    const row = document.createElement('div')
+    row.className = `card-row pick${m.id === settings.model ? ' current' : ''}`
+    row.innerHTML = `<span class="rname">${escHtml(m.name)}</span>${m.id === settings.model ? '<span class="rcheck">✓</span>' : ''}`
+    row.addEventListener('click', async () => {
+      await saveSettings({ model: m.id })
+      appendNotice(`Model set to ${m.name}`)
+      card.remove()
+    })
+    card.appendChild(row)
+  }
+  messagesEl.appendChild(card)
+  scrollBottom()
 }
 
 function handleClear() {
