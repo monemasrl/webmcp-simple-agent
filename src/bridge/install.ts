@@ -50,27 +50,35 @@ export function installBridge(
   }
 
   // Wrap-if-present: keep any native implementation working, but capture everything.
+  // Use Object.defineProperty to shadow a read-only prototype getter if present.
   const native = (win.document as any).modelContext
-  if (native) {
-    const nativeRegister = native.registerTool?.bind(native)
-    const nativeProvide = native.provideContext?.bind(native)
-    ;(win.document as any).modelContext = {
-      ...native,
-      registerTool(tool: RegisteredTool) {
-        nativeRegister?.(tool)
-        return modelContext.registerTool(tool)
-      },
-      unregisterTool(name: string) {
-        native.unregisterTool?.(name)
-        modelContext.unregisterTool(name)
-      },
-      provideContext(ctx: { tools?: RegisteredTool[] }) {
-        nativeProvide?.(ctx)
-        modelContext.provideContext(ctx)
-      },
-    }
-  } else {
-    ;(win.document as any).modelContext = modelContext
+  const value = native
+    ? {
+        ...native,
+        registerTool(tool: RegisteredTool) {
+          native.registerTool?.call(native, tool)
+          return modelContext.registerTool(tool)
+        },
+        unregisterTool(name: string) {
+          native.unregisterTool?.call(native, name)
+          modelContext.unregisterTool(name)
+        },
+        provideContext(ctx: { tools?: RegisteredTool[] }) {
+          native.provideContext?.call(native, ctx)
+          modelContext.provideContext(ctx)
+        },
+      }
+    : modelContext
+  try {
+    ;(win.document as any).modelContext = value
+  } catch {
+    // In Chrome, document.modelContext is a read-only getter on the prototype;
+    // shadow it with an own property instead.
+    Object.defineProperty(win.document, 'modelContext', {
+      value,
+      writable: true,
+      configurable: true,
+    })
   }
 
   async function callTool(callId: string, name: string, input: unknown): Promise<void> {
