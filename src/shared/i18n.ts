@@ -63,6 +63,10 @@ const EN: Catalog = {
   'phase.tools': 'Querying tool: {name}…',
   'phase.toolsDone': 'Tool responded',
   'phase.reprocessing': 'Processing response…',
+  'mic.start': 'Voice input',
+  'mic.listening': 'Listening…',
+  'mic.unsupported': 'Voice input is not supported in this browser.',
+  'mic.denied': 'Microphone access was denied.',
 }
 
 const IT: Catalog = {
@@ -121,6 +125,10 @@ const IT: Catalog = {
   'phase.tools': 'Interrogo lo strumento: {name}…',
   'phase.toolsDone': 'Strumento ha risposto',
   'phase.reprocessing': 'Rielaboro la risposta…',
+  'mic.start': 'Comando vocale',
+  'mic.listening': 'Ascolto…',
+  'mic.unsupported': 'Il comando vocale non è supportato in questo browser.',
+  'mic.denied': "L'accesso al microfono è stato negato.",
 }
 
 const CATALOGS: Record<Locale, Catalog> = { en: EN, it: IT }
@@ -143,4 +151,9 @@ export function t(locale: Locale, key: string, params?: Record<string, string | 
 
 export function localeName(id: Locale): string {
   return LOCALES.find((l) => l.id === id)?.name ?? id
+}
+
+/** BCP-47 tag for Web Speech / Intl APIs. */
+export function speechLang(id: Locale): string {
+  return id === 'it' ? 'it-IT' : 'en-US'
 }

@@ -3,7 +3,7 @@ import { runAgentTurn, type AgentEvent } from '../panel/agent'
 import { ClaudeApiError, makeProviderClient, type Message } from '../panel/claude'
 import { loadSettings, saveSettings } from '../shared/settings'
 import { PROVIDERS, getProvider, DEFAULT_PROVIDER_ID } from '../shared/providers'
-import { LOCALES, t as translate, detectLocale, localeName, type Locale } from '../shared/i18n'
+import { LOCALES, t as translate, detectLocale, localeName, speechLang, type Locale } from '../shared/i18n'
 import { WM_NS, type ToolDescriptor } from '../shared/protocol'
 import type { ToolDef } from '../panel/claude'
 
@@ -277,6 +277,23 @@ const CSS = `
 #send:hover { background: #4338ca; } #send:disabled { background: #c7d2fe; cursor: default; }
 #send svg { width: 15px; height: 15px; }
 
+#mic {
+  background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; border-radius: 10px;
+  width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0; transition: background 0.15s, color 0.15s;
+}
+#mic:hover { background: #e2e8f0; }
+#mic svg { width: 16px; height: 16px; }
+#mic.listening {
+  background: #ef4444; color: #fff; border-color: #ef4444;
+  animation: micpulse 1.4s infinite;
+}
+@keyframes micpulse {
+  0% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); }
+  70% { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+  100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+}
+
 /* Command palette */
 #cmd-palette {
   position: absolute; bottom: 110px; left: 11px; right: 11px;
@@ -356,6 +373,7 @@ const IC_BOT = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a2 2 
 const IC_MIN = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13H5v-2h14v2z"/></svg>`
 const IC_COG = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94a7 7 0 000-1.88l2.03-1.58a.49.49 0 00.12-.62l-1.92-3.32a.49.49 0 00-.6-.21l-2.39.96a7.02 7.02 0 00-1.63-.94l-.36-2.54A.48.48 0 0014 3h-3.84a.48.48 0 00-.48.41l-.36 2.54a7.02 7.02 0 00-1.63.94l-2.39-.96a.48.48 0 00-.6.21L2.78 9.46a.47.47 0 00.12.62l2.03 1.58a7.23 7.23 0 000 1.88l-2.03 1.58a.47.47 0 00-.12.62l1.92 3.32c.12.22.37.3.6.21l2.39-.96c.5.36 1.05.67 1.63.94l.36 2.54c.05.28.3.49.58.49H14c.28 0 .53-.21.57-.49l.36-2.54a7.02 7.02 0 001.63-.94l2.39.96c.22.09.48 0 .6-.21l1.92-3.32a.47.47 0 00-.12-.62l-2.21-1.58zM12 15.6a3.6 3.6 0 110-7.2 3.6 3.6 0 010 7.2z"/></svg>`
 const IC_BUG = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 8h-2.81a5.98 5.98 0 00-1.82-1.96l1.63-1.63-1.41-1.41-2.17 2.17a6.02 6.02 0 00-2.44 0L8.83 3 7.42 4.41l1.62 1.63A5.98 5.98 0 007.22 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81a6 6 0 0010.38 0H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/></svg>`
+const IC_MIC = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 003-3V5a3 3 0 00-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 006 6.92V21h2v-3.08A7 7 0 0019 11h-2z"/></svg>`
 
 // ─── Shadow DOM ───────────────────────────────────────────────────────────────
 
@@ -432,6 +450,7 @@ panel.innerHTML = `
 </div>
 <div id="cmd-palette" class="hidden"></div>
 <div id="composer">
+  <button id="mic" hidden>${IC_MIC}</button>
   <textarea id="prompt" rows="1" data-i18n-ph="composer.placeholder" placeholder="Type a message or /command…"></textarea>
   <button id="send">${IC_SEND}</button>
 </div>
@@ -447,6 +466,7 @@ const configEl = $('config') as HTMLDivElement
 const setupEl = $('setup') as HTMLDivElement
 const promptEl = $('prompt') as HTMLTextAreaElement
 const sendBtn = $('send') as HTMLButtonElement
+const micBtn = $('mic') as HTMLButtonElement
 const bannerEl = $('banner') as HTMLDivElement
 const tclabel = $('tclabel') as HTMLSpanElement
 const tcdot = $('tcdot') as HTMLSpanElement
@@ -499,6 +519,7 @@ function applyTranslations() {
   // Dynamic bits not covered by data attributes
   refreshToolbarLabel()
   cfgToggleKey.textContent = cfgKey.type === 'text' ? t('config.hide') : t('config.show')
+  if (!micBtn.hidden) micBtn.title = listening ? t('mic.listening') : t('mic.start')
 }
 
 function setLocale(loc: Locale) {
@@ -943,6 +964,78 @@ function handleDebug() {
 
 btnDebug.addEventListener('click', handleDebug)
 
+// ─── Voice input (Web Speech API) ─────────────────────────────────────────────
+
+type SpeechRec = {
+  lang: string
+  continuous: boolean
+  interimResults: boolean
+  start: () => void
+  stop: () => void
+  abort: () => void
+  onresult: ((ev: any) => void) | null
+  onerror: ((ev: any) => void) | null
+  onend: (() => void) | null
+}
+
+const SpeechRecognitionCtor: (new () => SpeechRec) | undefined =
+  (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition
+
+let recognition: SpeechRec | null = null
+let listening = false
+let baseText = '' // textarea content before the current dictation started
+
+if (SpeechRecognitionCtor) {
+  micBtn.hidden = false
+  micBtn.title = t('mic.start')
+}
+
+function stopListening() {
+  listening = false
+  micBtn.classList.remove('listening')
+  micBtn.title = t('mic.start')
+  try { recognition?.stop() } catch { /* already stopped */ }
+}
+
+function startListening() {
+  if (!SpeechRecognitionCtor) { appendNotice(t('mic.unsupported')); return }
+  recognition = new SpeechRecognitionCtor()
+  recognition.lang = speechLang(currentLocale)
+  recognition.continuous = false
+  recognition.interimResults = true
+  baseText = promptEl.value ? promptEl.value.trimEnd() + ' ' : ''
+
+  recognition.onresult = (ev: any) => {
+    let transcript = ''
+    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      transcript += ev.results[i][0].transcript
+    }
+    promptEl.value = baseText + transcript
+    promptEl.style.height = 'auto'
+    promptEl.style.height = Math.min(promptEl.scrollHeight, 96) + 'px'
+  }
+  recognition.onerror = (ev: any) => {
+    if (ev?.error === 'not-allowed' || ev?.error === 'service-not-allowed') {
+      appendNotice(t('mic.denied'))
+    }
+    stopListening()
+  }
+  recognition.onend = () => { stopListening(); promptEl.focus() }
+
+  try {
+    recognition.start()
+    listening = true
+    micBtn.classList.add('listening')
+    micBtn.title = t('mic.listening')
+  } catch {
+    stopListening()
+  }
+}
+
+micBtn.addEventListener('click', () => {
+  if (listening) stopListening(); else startListening()
+})
+
 // ─── Auto-resize textarea ─────────────────────────────────────────────────────
 
 promptEl.addEventListener('input', () => {
@@ -990,6 +1083,7 @@ promptEl.addEventListener('keydown', (ev) => {
 
 sendBtn.addEventListener('click', async () => {
   if (busy) return
+  if (listening) stopListening()
   const raw = promptEl.value.trim()
   if (!raw) return
   hideCmdPalette()
