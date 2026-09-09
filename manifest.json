@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "WebMCP Agent",
+  "version": "0.1.0",
+  "description": "Claude-powered agent for pages exposing WebMCP tools (document.modelContext)",
+  "permissions": ["storage", "sidePanel", "tabs"],
+  "host_permissions": ["https://api.anthropic.com/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["bridge.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["relay.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "action": { "default_title": "WebMCP Agent" },
+  "side_panel": { "default_path": "panel.html" },
+  "options_page": "options.html"
+}
