@@ -1,6 +1,6 @@
 import { marked } from 'marked'
 import { runAgentTurn, type AgentEvent } from './agent'
-import { ClaudeApiError, makeClaudeClient, type Message } from './claude'
+import { ClaudeApiError, makeProviderClient, type Message } from './claude'
 import { listTabTools, makeCallTool, toToolDefs } from './tab-tools'
 import { loadSettings } from '../shared/settings'
 import type { ToolDescriptor } from '../shared/protocol'
@@ -236,7 +236,7 @@ document.getElementById('composer')!.addEventListener('submit', async (ev) => {
 
   try {
     const text = await runAgentTurn({
-      client: makeClaudeClient(settings.apiKey),
+      client: makeProviderClient(settings.providerId, settings.apiKey),
       model: settings.model,
       system: SYSTEM_PROMPT,
       messages,

@@ -1,12 +1,42 @@
 <!doctype html>
 <html>
-  <head><meta charset="utf-8" /><title>WebMCP Agent — Options</title></head>
+  <head>
+    <meta charset="utf-8" />
+    <title>WebMCP Agent — Options</title>
+    <style>
+      body { font-family: system-ui, sans-serif; font-size: 14px; max-width: 480px; margin: 32px auto; color: #111; }
+      h1 { font-size: 18px; margin-bottom: 24px; }
+      label { display: block; margin-bottom: 14px; color: #444; }
+      label span { display: block; font-weight: 500; margin-bottom: 4px; }
+      select, input { width: 100%; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; box-sizing: border-box; }
+      select:focus, input:focus { outline: none; border-color: #6366f1; }
+      .row { display: flex; gap: 8px; align-items: center; }
+      .key-docs { font-size: 12px; color: #6366f1; margin-top: 4px; display: inline-block; }
+      button[type=submit] { background: #4f46e5; color: #fff; border: none; border-radius: 6px; padding: 8px 20px; cursor: pointer; font-size: 14px; }
+      button[type=submit]:hover { background: #4338ca; }
+      #status { font-size: 13px; color: #16a34a; margin-left: 10px; }
+    </style>
+  </head>
   <body>
-    <h1>WebMCP Agent</h1>
+    <h1>WebMCP Agent — Settings</h1>
     <form id="settings">
-      <label>Anthropic API key <input type="password" id="apiKey" size="60" /></label><br />
-      <label>Model <input type="text" id="model" size="40" /></label><br />
-      <button type="submit">Save</button> <span id="status"></span>
+      <label>
+        <span>Provider</span>
+        <select id="provider"></select>
+      </label>
+      <label>
+        <span>Model</span>
+        <select id="model"></select>
+      </label>
+      <label>
+        <span>API Key</span>
+        <input type="password" id="apiKey" autocomplete="off" />
+        <a id="key-docs" class="key-docs" href="#" target="_blank">Get API key ↗</a>
+      </label>
+      <div class="row">
+        <button type="submit">Save</button>
+        <span id="status"></span>
+      </div>
     </form>
     <script src="options.js"></script>
   </body>
