@@ -10,6 +10,7 @@ const entries = [
   { in: 'src/background/index.ts', out: 'background' },
   { in: 'src/panel/main.ts', out: 'panel' },
   { in: 'src/options/main.ts', out: 'options' },
+  { in: 'src/injected/widget.ts', out: 'widget' },
 ]
 
 await build({
