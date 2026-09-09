@@ -224,7 +224,9 @@ document.getElementById('composer')!.addEventListener('submit', async (ev) => {
   const settleMap = new Map<string, (ok: boolean, result: string) => void>()
 
   const onEvent = (e: AgentEvent) => {
-    if (e.type === 'tool-call') {
+    if (e.type === 'phase') {
+      return
+    } else if (e.type === 'tool-call') {
       const settle = toolCallBlock(e.name, e.input)
       settleMap.set(e.name, settle)
     } else {

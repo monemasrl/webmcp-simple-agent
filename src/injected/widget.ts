@@ -220,6 +220,27 @@ const CSS = `
   border-radius: 50%; animation: spin 0.6s linear infinite; flex-shrink: 0;
 }
 
+/* Status bubble (typing / progress indicator) */
+.status-bubble {
+  align-self: flex-start;
+  display: flex; align-items: center; gap: 8px;
+  background: #f1f5f9; color: #475569;
+  padding: 9px 13px; border-radius: 15px 15px 15px 4px; font-size: 13px;
+  max-width: 85%;
+}
+.status-bubble .stext { transition: opacity 0.15s; }
+.status-dots { display: inline-flex; gap: 3px; flex-shrink: 0; }
+.status-dots span {
+  width: 5px; height: 5px; border-radius: 50%; background: #94a3b8;
+  animation: sdot 1.2s infinite ease-in-out both;
+}
+.status-dots span:nth-child(1) { animation-delay: -0.32s; }
+.status-dots span:nth-child(2) { animation-delay: -0.16s; }
+@keyframes sdot {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
 /* Composer */
 #composer {
   border-top: 1px solid #e8edf2; background: #fff;
@@ -845,6 +866,50 @@ function toolCallBlock(name: string, input: unknown): (ok: boolean, result: stri
   }
 }
 
+// ─── Status bubble (progress feedback) ────────────────────────────────────────
+
+let statusEl: HTMLDivElement | null = null
+let statusWaitTimer: ReturnType<typeof setTimeout> | undefined
+
+function showStatus(text: string) {
+  removeWelcome()
+  if (!statusEl) {
+    statusEl = document.createElement('div')
+    statusEl.className = 'status-bubble'
+    statusEl.innerHTML = `<span class="stext"></span><span class="status-dots"><span></span><span></span><span></span></span>`
+    messagesEl.appendChild(statusEl)
+  }
+  const stext = statusEl.querySelector('.stext') as HTMLSpanElement
+  stext.textContent = text
+  scrollBottom()
+}
+
+function clearStatusTimer() {
+  if (statusWaitTimer) { clearTimeout(statusWaitTimer); statusWaitTimer = undefined }
+}
+
+function hideStatus() {
+  clearStatusTimer()
+  statusEl?.remove()
+  statusEl = null
+}
+
+/** Maps an agent phase to a localized status message with sensible timing. */
+function onPhase(phase: 'sending' | 'tools' | 'reprocessing') {
+  clearStatusTimer()
+  if (phase === 'sending') {
+    showStatus(t('phase.sending'))
+    // The request is a single await; auto-advance to "waiting" so the user
+    // sees progression while the model is thinking.
+    statusWaitTimer = setTimeout(() => showStatus(t('phase.waiting')), 700)
+  } else if (phase === 'tools') {
+    // The per-tool blocks (with their own spinners) are the indicator now.
+    hideStatus()
+  } else if (phase === 'reprocessing') {
+    showStatus(t('phase.reprocessing'))
+  }
+}
+
 // ─── Debug toggle ─────────────────────────────────────────────────────────────
 
 function setDebug(on: boolean) {
@@ -947,7 +1012,9 @@ sendBtn.addEventListener('click', async () => {
 
   const settleMap = new Map<string, (ok: boolean, result: string) => void>()
   const onEvent = (e: AgentEvent) => {
-    if (e.type === 'tool-call') {
+    if (e.type === 'phase') {
+      onPhase(e.phase)
+    } else if (e.type === 'tool-call') {
       settleMap.set(e.name, toolCallBlock(e.name, e.input))
     } else {
       settleMap.get(e.name)?.(e.ok, e.result)
@@ -965,8 +1032,10 @@ sendBtn.addEventListener('click', async () => {
       callTool,
       onEvent,
     })
+    hideStatus()
     appendBubble('assistant', renderMarkdown(text))
   } catch (err) {
+    hideStatus()
     if (err instanceof ClaudeApiError && err.status === 401) {
       bannerEl.hidden = false
       bannerEl.textContent = t('banner.invalidKey')

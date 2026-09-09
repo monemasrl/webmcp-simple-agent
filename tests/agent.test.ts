@@ -42,7 +42,7 @@ describe('runAgentTurn', () => {
   it('executes a tool_use and feeds tool_result back', async () => {
     const client = scriptedClient([toolUseResponse('list_segments', {}), textResponse('found XYZ')])
     const callTool = vi.fn(async () => ({ ok: true, result: '[{"name":"XYZ"}]' }))
-    const events: unknown[] = []
+    const events: { type: string }[] = []
     const text = await runAgentTurn({ ...base(client), callTool, onEvent: (e) => events.push(e) })
     expect(text).toBe('found XYZ')
     expect(callTool).toHaveBeenCalledWith('list_segments', {})
@@ -52,7 +52,11 @@ describe('runAgentTurn', () => {
     expect(toolResultMsg.content[0]).toMatchObject({
       type: 'tool_result', tool_use_id: 'tu_list_segments', content: '[{"name":"XYZ"}]',
     })
-    expect(events).toHaveLength(2)
+    const toolEvents = events.filter((e) => e.type === 'tool-call' || e.type === 'tool-result')
+    expect(toolEvents).toHaveLength(2)
+    // phase events: sending → tools → reprocessing
+    expect(events.filter((e) => e.type === 'phase').map((e) => (e as any).phase))
+      .toEqual(['sending', 'tools', 'reprocessing'])
   })
 
   it('marks failed tool calls with is_error', async () => {

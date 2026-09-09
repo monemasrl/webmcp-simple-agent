@@ -4,7 +4,10 @@ export const MAX_ITERATIONS = 20
 
 export type CallTool = (name: string, input: unknown) => Promise<{ ok: boolean; result: string }>
 
+export type AgentPhase = 'sending' | 'tools' | 'reprocessing'
+
 export type AgentEvent =
+  | { type: 'phase'; phase: AgentPhase }
   | { type: 'tool-call'; name: string; input: unknown }
   | { type: 'tool-result'; name: string; ok: boolean; result: string }
 
@@ -20,6 +23,7 @@ export async function runAgentTurn(opts: {
   const { client, model, system, messages, tools, callTool, onEvent } = opts
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
+    onEvent?.({ type: 'phase', phase: i === 0 ? 'sending' : 'reprocessing' })
     const res = await client.createMessage({ model, system, messages, tools })
     messages.push({ role: 'assistant', content: res.content })
 
@@ -31,6 +35,7 @@ export async function runAgentTurn(opts: {
         .join('\n')
     }
 
+    onEvent?.({ type: 'phase', phase: 'tools' })
     const results: ContentBlock[] = []
     for (const tu of toolUses) {
       onEvent?.({ type: 'tool-call', name: tu.name, input: tu.input })

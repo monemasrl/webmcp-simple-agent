@@ -58,6 +58,11 @@ const EN: Catalog = {
   'notice.help': 'Commands: /config · /model · /tools · /debug · /language · /clear · /help',
   'banner.invalidKey': 'Invalid API key — use /config to update it.',
   'banner.missingKey': 'Missing API key — open the extension Options.',
+  'phase.sending': 'Sending…',
+  'phase.waiting': 'Waiting for response…',
+  'phase.tools': 'Querying tool: {name}…',
+  'phase.toolsDone': 'Tool responded',
+  'phase.reprocessing': 'Processing response…',
 }
 
 const IT: Catalog = {
@@ -111,6 +116,11 @@ const IT: Catalog = {
   'notice.help': 'Comandi: /config · /model · /tools · /debug · /language · /clear · /help',
   'banner.invalidKey': 'API key non valida — usa /config per aggiornarla.',
   'banner.missingKey': "API key mancante — apri le Opzioni dell'estensione.",
+  'phase.sending': 'Sto inviando…',
+  'phase.waiting': 'In attesa di risposta…',
+  'phase.tools': 'Interrogo lo strumento: {name}…',
+  'phase.toolsDone': 'Strumento ha risposto',
+  'phase.reprocessing': 'Rielaboro la risposta…',
 }
 
 const CATALOGS: Record<Locale, Catalog> = { en: EN, it: IT }
