@@ -185,7 +185,7 @@ const CSS = `
 
 /* Messages */
 #messages {
-  flex: 1; overflow-y: auto; padding: 14px 13px;
+  flex: 1; min-height: 0; overflow-y: auto; padding: 14px 13px;
   display: flex; flex-direction: column; gap: 11px;
   scrollbar-width: thin; scrollbar-color: #e2e8f0 transparent;
 }
@@ -346,7 +346,7 @@ const CSS = `
 
 /* ─── Config panel ─────────────────────────── */
 #config {
-  flex: 1; overflow-y: auto; padding: 16px;
+  flex: 1; min-height: 0; overflow-y: auto; padding: 16px;
   display: flex; flex-direction: column; gap: 14px;
   background: #fff;
 }
