@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
+    "pack:zip": "node scripts/build.mjs && node scripts/pack.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
