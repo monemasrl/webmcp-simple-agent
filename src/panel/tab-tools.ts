@@ -8,7 +8,9 @@ export function toToolDefs(tools: ToolDescriptor[]): ToolDef[] {
   return tools.map((t) => ({
     name: t.name,
     description: t.description,
-    input_schema: Object.keys(t.inputSchema).length > 0 ? t.inputSchema : { type: 'object' },
+    // A tool may arrive without a schema (some sites omit inputSchema); guard
+    // against Object.keys(undefined) → "Cannot convert undefined or null to object".
+    input_schema: t.inputSchema && Object.keys(t.inputSchema).length > 0 ? t.inputSchema : { type: 'object' },
   }))
 }
 

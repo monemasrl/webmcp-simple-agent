@@ -11,6 +11,14 @@ describe('toToolDefs', () => {
       { name: 'b', description: '', input_schema: { type: 'object' } },
     ])
   })
+
+  it('defaults a missing inputSchema to object instead of throwing', () => {
+    // Some sites register tools without an inputSchema; Object.keys(undefined)
+    // would throw "Cannot convert undefined or null to object".
+    expect(toToolDefs([{ name: 'c', description: '' } as any])).toEqual([
+      { name: 'c', description: '', input_schema: { type: 'object' } },
+    ])
+  })
 })
 
 describe('tab messaging helpers', () => {

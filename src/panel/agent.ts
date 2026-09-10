@@ -8,6 +8,8 @@ export type AgentPhase = 'sending' | 'tools' | 'reprocessing'
 
 export type AgentEvent =
   | { type: 'phase'; phase: AgentPhase }
+  | { type: 'llm-request'; iteration: number; request: { model: string; system: string; messages: Message[]; tools: ToolDef[] } }
+  | { type: 'llm-response'; iteration: number; response: { content: ContentBlock[]; stop_reason: string } }
   | { type: 'tool-call'; name: string; input: unknown }
   | { type: 'tool-result'; name: string; ok: boolean; result: string }
 
@@ -24,7 +26,9 @@ export async function runAgentTurn(opts: {
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     onEvent?.({ type: 'phase', phase: i === 0 ? 'sending' : 'reprocessing' })
+    onEvent?.({ type: 'llm-request', iteration: i, request: { model, system, messages, tools } })
     const res = await client.createMessage({ model, system, messages, tools })
+    onEvent?.({ type: 'llm-response', iteration: i, response: res })
     messages.push({ role: 'assistant', content: res.content })
 
     const toolUses = res.content.filter((b): b is Extract<ContentBlock, { type: 'tool_use' }> => b.type === 'tool_use')

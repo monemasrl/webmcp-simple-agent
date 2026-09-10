@@ -67,6 +67,7 @@ const EN: Catalog = {
   'mic.listening': 'Listening…',
   'mic.unsupported': 'Voice input is not supported in this browser.',
   'mic.denied': 'Microphone access was denied.',
+  'debug.popupBlocked': 'Debug window was blocked — allow pop-ups for this site, then run /debug again.',
 }
 
 const IT: Catalog = {
@@ -129,6 +130,7 @@ const IT: Catalog = {
   'mic.listening': 'Ascolto…',
   'mic.unsupported': 'Il comando vocale non è supportato in questo browser.',
   'mic.denied': "L'accesso al microfono è stato negato.",
+  'debug.popupBlocked': 'La finestra di debug è stata bloccata — consenti i pop-up per questo sito, poi rilancia /debug.',
 }
 
 const CATALOGS: Record<Locale, Catalog> = { en: EN, it: IT }

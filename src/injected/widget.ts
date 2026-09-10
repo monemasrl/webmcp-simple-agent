@@ -73,7 +73,10 @@ function toToolDefs(tools: ToolDescriptor[]): ToolDef[] {
   return tools.map((t) => ({
     name: t.name,
     description: t.description,
-    input_schema: t.inputSchema as ToolDef['input_schema'],
+    input_schema:
+      t.inputSchema && Object.keys(t.inputSchema).length > 0
+        ? (t.inputSchema as ToolDef['input_schema'])
+        : { type: 'object' },
   }))
 }
 
@@ -989,6 +992,90 @@ function onPhase(phase: 'sending' | 'tools' | 'reprocessing') {
   }
 }
 
+// ─── Debug console (separate window) ──────────────────────────────────────────
+
+type DebugEntry = { kind: string; title: string; text: string }
+const debugBuffer: DebugEntry[] = []
+const DEBUG_BUFFER_MAX = 300
+let debugWin: Window | null = null
+
+const DEBUG_DOC_STYLE = `
+  body { margin: 0; background: #0f172a; color: #e2e8f0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  header { position: sticky; top: 0; background: #1e293b; padding: 10px 14px; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 13px; margin: 0; font-family: system-ui, sans-serif; }
+  header button { background: #334155; color: #e2e8f0; border: none; border-radius: 6px; padding: 5px 10px; cursor: pointer; font-size: 11px; }
+  header button:hover { background: #475569; }
+  #log { padding: 12px 14px; }
+  .entry { margin-bottom: 12px; border: 1px solid #1e293b; border-radius: 8px; overflow: hidden; }
+  .etitle { padding: 6px 10px; font-weight: 600; background: #1e293b; font-family: system-ui, sans-serif; display: flex; gap: 8px; }
+  .etitle .ts { color: #64748b; font-weight: 400; margin-left: auto; }
+  .entry pre { margin: 0; padding: 10px; white-space: pre-wrap; word-break: break-word; overflow-x: auto; }
+  .entry.request .etitle { color: #93c5fd; }
+  .entry.response .etitle { color: #86efac; }
+  .entry.tool-call .etitle { color: #fcd34d; }
+  .entry.tool-result .etitle { color: #fdba74; }
+  .empty { color: #64748b; padding: 20px; text-align: center; }
+`
+
+function safeStringify(payload: unknown): string {
+  if (typeof payload === 'string') return payload
+  try {
+    return JSON.stringify(payload, null, 2)
+  } catch {
+    return String(payload)
+  }
+}
+
+function renderDebugEntry(w: Window, e: DebugEntry) {
+  const log = w.document.getElementById('log')
+  if (!log) return
+  log.querySelector('.empty')?.remove()
+  const entry = w.document.createElement('div')
+  entry.className = `entry ${e.kind}`
+  const title = w.document.createElement('div')
+  title.className = 'etitle'
+  title.innerHTML = `<span>${escHtml(e.title)}</span>`
+  const pre = w.document.createElement('pre')
+  pre.textContent = e.text
+  entry.appendChild(title)
+  entry.appendChild(pre)
+  log.appendChild(entry)
+  log.scrollTop = log.scrollHeight
+}
+
+function openDebugWindow(): Window | null {
+  if (debugWin && !debugWin.closed) {
+    debugWin.focus()
+    return debugWin
+  }
+  const w = window.open('', 'webmcp-agent-debug', 'width=680,height=860,scrollbars=yes')
+  if (!w) return null
+  w.document.open()
+  w.document.write(
+    `<!doctype html><html><head><meta charset="utf-8"><title>WebMCP Agent — Debug</title><style>${DEBUG_DOC_STYLE}</style></head>` +
+      `<body><header><h1>WebMCP Agent — Debug</h1><button id="clear">Clear</button></header>` +
+      `<div id="log"><div class="empty">Waiting for the next request…</div></div></body></html>`,
+  )
+  w.document.close()
+  w.document.getElementById('clear')?.addEventListener('click', () => {
+    debugBuffer.length = 0
+    const log = w.document.getElementById('log')
+    if (log) log.innerHTML = '<div class="empty">Cleared.</div>'
+  })
+  debugWin = w
+  // Replay everything captured so far.
+  for (const e of debugBuffer) renderDebugEntry(w, e)
+  return w
+}
+
+function recordDebug(kind: string, title: string, payload: unknown) {
+  if (!debugMode) return
+  const entry: DebugEntry = { kind, title, text: safeStringify(payload) }
+  debugBuffer.push(entry)
+  if (debugBuffer.length > DEBUG_BUFFER_MAX) debugBuffer.shift()
+  if (debugWin && !debugWin.closed) renderDebugEntry(debugWin, entry)
+}
+
 // ─── Debug toggle ─────────────────────────────────────────────────────────────
 
 function setDebug(on: boolean) {
@@ -996,6 +1083,13 @@ function setDebug(on: boolean) {
   messagesEl.classList.toggle('debug-on', debugMode)
   btnDebug.hidden = !debugMode
   btnDebug.classList.toggle('active', debugMode)
+  if (on) {
+    const w = openDebugWindow()
+    if (!w) appendNotice(t('debug.popupBlocked'))
+  } else if (debugWin && !debugWin.closed) {
+    debugWin.close()
+    debugWin = null
+  }
 }
 
 function handleDebug() {
@@ -1003,7 +1097,15 @@ function handleDebug() {
   appendNotice(debugMode ? t('notice.debugOn') : t('notice.debugOff'))
 }
 
-btnDebug.addEventListener('click', handleDebug)
+// The bug button reopens the console if it was closed while debug stayed on.
+btnDebug.addEventListener('click', () => {
+  if (debugMode && (!debugWin || debugWin.closed)) {
+    const w = openDebugWindow()
+    if (!w) appendNotice(t('debug.popupBlocked'))
+    return
+  }
+  handleDebug()
+})
 
 // ─── Voice input (Web Speech API) ─────────────────────────────────────────────
 
@@ -1168,9 +1270,15 @@ sendBtn.addEventListener('click', async () => {
   const onEvent = (e: AgentEvent) => {
     if (e.type === 'phase') {
       onPhase(e.phase)
+    } else if (e.type === 'llm-request') {
+      recordDebug('request', `→ LLM request #${e.iteration + 1} (${e.request.model})`, e.request)
+    } else if (e.type === 'llm-response') {
+      recordDebug('response', `← LLM response #${e.iteration + 1} (${e.response.stop_reason})`, e.response)
     } else if (e.type === 'tool-call') {
+      recordDebug('tool-call', `⚙ tool call: ${e.name}`, e.input)
       settleMap.set(e.name, toolCallBlock(e.name, e.input))
     } else {
+      recordDebug('tool-result', `⚙ tool result: ${e.name} (${e.ok ? 'ok' : 'error'})`, e.result)
       settleMap.get(e.name)?.(e.ok, e.result)
       settleMap.delete(e.name)
     }
