@@ -82,4 +82,4 @@ We may update this policy; material changes will be reflected by updating the
 
 ## Contact
 
-For questions about this policy, contact: **bettarini@monema.it**
+For questions about this policy, contact: **info@monema.it**
