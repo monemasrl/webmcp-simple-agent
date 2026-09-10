@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "WebMCP Simple Agent",
   "version": "0.1.0",
-  "description": "Claude-powered agent for pages exposing WebMCP tools (document.modelContext)",
+  "description": "In-page AI chat that operates the current site through its WebMCP tools. Bring your own key: Anthropic, OpenAI or Kimi.",
   "permissions": [
     "storage",
     "sidePanel",
