@@ -912,42 +912,6 @@ function appendNotice(text: string) {
   scrollBottom()
 }
 
-function toolCallBlock(name: string, input: unknown): (ok: boolean, result: string) => void {
-  removeWelcome()
-  const wrap = document.createElement('div')
-  wrap.className = 'tool-block'
-  if (debugMode) wrap.classList.add('debug-on')
-  wrap.innerHTML = `
-    <div class="tool-header">
-      <span class="tool-name">${escHtml(name)}</span>
-      <span class="spinner"></span>
-    </div>
-    <pre class="debug-only">${escHtml(JSON.stringify(input, null, 2))}</pre>
-  `
-  messagesEl.appendChild(wrap)
-  scrollBottom()
-
-  return (ok, result) => {
-    wrap.querySelector('.spinner')?.remove()
-    const hdr = wrap.querySelector('.tool-header')!
-    const st = document.createElement('span')
-    st.className = `ts ${ok ? 'ok' : 'err'}`
-    st.textContent = ok ? '✓' : '✗'
-    hdr.appendChild(st)
-
-    const body = document.createElement('div')
-    body.className = 'tool-result'
-    body.innerHTML = renderMarkdown(result)
-    wrap.appendChild(body)
-
-    const dbgOut = document.createElement('pre')
-    dbgOut.className = 'debug-only'
-    dbgOut.textContent = result
-    wrap.appendChild(dbgOut)
-    scrollBottom()
-  }
-}
-
 // ─── Status bubble (progress feedback) ────────────────────────────────────────
 
 let statusEl: HTMLDivElement | null = null
@@ -976,20 +940,29 @@ function hideStatus() {
   statusEl = null
 }
 
-/** Maps an agent phase to a localized status message with sensible timing. */
+/**
+ * Drives the single status bubble through a turn. Both the model call and the
+ * reprocessing step are one await, so after a short delay we advance the text to
+ * "receiving response" to convey progress.
+ */
 function onPhase(phase: 'sending' | 'tools' | 'reprocessing') {
   clearStatusTimer()
   if (phase === 'sending') {
     showStatus(t('phase.sending'))
-    // The request is a single await; auto-advance to "waiting" so the user
-    // sees progression while the model is thinking.
     statusWaitTimer = setTimeout(() => showStatus(t('phase.waiting')), 700)
   } else if (phase === 'tools') {
-    // The per-tool blocks (with their own spinners) are the indicator now.
-    hideStatus()
+    // The concrete tool name arrives with the tool-call event; leave the
+    // current text until then.
   } else if (phase === 'reprocessing') {
     showStatus(t('phase.reprocessing'))
+    statusWaitTimer = setTimeout(() => showStatus(t('phase.waiting')), 700)
   }
+}
+
+/** The single status bubble reflects the tool being called (no separate block). */
+function onToolCallStatus(name: string) {
+  clearStatusTimer()
+  showStatus(t('phase.tools', { name }))
 }
 
 // ─── Debug console (separate window) ──────────────────────────────────────────
@@ -1266,8 +1239,9 @@ sendBtn.addEventListener('click', async () => {
   appendBubble('user', escHtml(raw))
   messages.push({ role: 'user', content: raw })
 
-  const settleMap = new Map<string, (ok: boolean, result: string) => void>()
   const onEvent = (e: AgentEvent) => {
+    // The chat shows only the single status bubble; all raw payloads go to the
+    // debug window (recordDebug), never inline.
     if (e.type === 'phase') {
       onPhase(e.phase)
     } else if (e.type === 'llm-request') {
@@ -1275,12 +1249,10 @@ sendBtn.addEventListener('click', async () => {
     } else if (e.type === 'llm-response') {
       recordDebug('response', `← LLM response #${e.iteration + 1} (${e.response.stop_reason})`, e.response)
     } else if (e.type === 'tool-call') {
+      onToolCallStatus(e.name)
       recordDebug('tool-call', `⚙ tool call: ${e.name}`, e.input)
-      settleMap.set(e.name, toolCallBlock(e.name, e.input))
     } else {
       recordDebug('tool-result', `⚙ tool result: ${e.name} (${e.ok ? 'ok' : 'error'})`, e.result)
-      settleMap.get(e.name)?.(e.ok, e.result)
-      settleMap.delete(e.name)
     }
   }
 
