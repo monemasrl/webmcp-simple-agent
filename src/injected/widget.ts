@@ -287,6 +287,8 @@ const CSS = `
   max-width: 85%;
 }
 .status-bubble .stext { transition: opacity 0.15s; }
+.status-bubble.done { background: #f0fdf4; color: #475569; font-size: 12px; padding: 6px 12px; }
+.status-bubble.done .scheck { color: #16a34a; font-weight: 700; }
 .status-dots { display: inline-flex; gap: 3px; flex-shrink: 0; }
 .status-dots span {
   width: 5px; height: 5px; border-radius: 50%; background: #94a3b8;
@@ -941,6 +943,26 @@ function hideStatus() {
 }
 
 /**
+ * Turns the live status bubble into a persistent summary showing the elapsed
+ * processing time, then detaches it so the next turn starts a fresh one. The
+ * bubble stays in the chat above the final answer.
+ */
+function finalizeStatus(seconds: number) {
+  clearStatusTimer()
+  if (!statusEl) return
+  statusEl.classList.add('done')
+  statusEl.querySelector('.status-dots')?.remove()
+  const stext = statusEl.querySelector('.stext') as HTMLSpanElement
+  stext.textContent = t('phase.done', { s: seconds.toFixed(1) })
+  const check = document.createElement('span')
+  check.className = 'scheck'
+  check.textContent = '✓'
+  statusEl.insertBefore(check, stext)
+  statusEl = null
+  scrollBottom()
+}
+
+/**
  * Drives the single status bubble through a turn. Both the model call and the
  * reprocessing step are one await, so after a short delay we advance the text to
  * "receiving response" to convey progress.
@@ -1256,6 +1278,7 @@ sendBtn.addEventListener('click', async () => {
     }
   }
 
+  const startedAt = performance.now()
   try {
     const text = await runAgentTurn({
       client: makeProviderClient(settings.providerId, settings.apiKey),
@@ -1266,7 +1289,7 @@ sendBtn.addEventListener('click', async () => {
       callTool,
       onEvent,
     })
-    hideStatus()
+    finalizeStatus((performance.now() - startedAt) / 1000)
     appendBubble('assistant', renderMarkdown(text))
   } catch (err) {
     hideStatus()
