@@ -10,7 +10,7 @@ pnpm build        # outputs dist/ (manifest, JS bundles, HTML, icons)
 ## Create a store-uploadable zip
 
 ```bash
-pnpm pack:zip     # builds, then writes webmcp-agent-<version>.zip
+pnpm pack:zip     # builds, then writes webmcp-simple-agent-<version>.zip
 ```
 
 The archive has `manifest.json` at its root (required by the Chrome Web Store).

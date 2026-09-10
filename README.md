@@ -1,13 +1,14 @@
-# WebMCP Agent
+# WebMCP Simple Agent
 
-Chrome extension: a side-panel chat where Claude executes your prompt using the
-[WebMCP](https://webmachinelearning.github.io/webmcp/) tools the current page
-registers on `document.modelContext`. Works on stable Chrome — a MAIN-world
-content script polyfills `document.modelContext`, so no origin-trial flag is
-needed.
+Chrome extension: an in-page chat (plus a side panel) where an AI model executes
+your prompt using the [WebMCP](https://webmachinelearning.github.io/webmcp/)
+tools the current page exposes — both imperative
+(`document.modelContext.registerTool()`) and declarative (`<form toolname>`).
+Works on stable Chrome: a MAIN-world content script polyfills
+`document.modelContext`, so no origin-trial flag is needed.
 
-Internal/demo tool. Claude API only. Design doc:
-`docs/specs/2026-09-09-webmcp-agent-extension-design.md`.
+Bring your own API key — Anthropic, OpenAI or Kimi, with model selection.
+Design doc: `docs/specs/2026-09-09-webmcp-agent-extension-design.md`.
 
 ## Build & load
 
